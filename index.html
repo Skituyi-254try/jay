@@ -1,0 +1,69 @@
+-- Users
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  date_of_birth DATE NOT NULL,
+  age_verified BOOLEAN DEFAULT FALSE,
+  verification_method TEXT,        -- 'yoti', 'manual', etc.
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  is_banned BOOLEAN DEFAULT FALSE
+);
+
+-- Profiles
+CREATE TABLE profiles (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
+  bio TEXT CHECK (char_length(bio) <= 500),
+  gender TEXT,
+  looking_for TEXT,
+  intent TEXT CHECK (intent IN ('dating','friends','longterm')),
+  location_city TEXT,
+  photo_url TEXT,                  -- main photo (moderated)
+  is_visible BOOLEAN DEFAULT TRUE,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Consent-based likes (a "match" only forms when both sides like)
+CREATE TABLE likes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  from_user UUID REFERENCES users(id),
+  to_user UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(from_user, to_user)
+);
+
+CREATE TABLE matches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_a UUID REFERENCES users(id),
+  user_b UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  chat_unlocked BOOLEAN DEFAULT TRUE,  -- only true when both consented
+  UNIQUE(user_a, user_b)
+);
+
+-- Messages
+CREATE TABLE messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  match_id UUID REFERENCES matches(id),
+  sender_id UUID REFERENCES users(id),
+  body TEXT CHECK (char_length(body) <= 2000),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  is_flagged BOOLEAN DEFAULT FALSE
+);
+
+-- Safety
+CREATE TABLE reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id UUID REFERENCES users(id),
+  reported_id UUID REFERENCES users(id),
+  reason TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',   -- pending / reviewed / actioned
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE blocks (
+  blocker_id UUID REFERENCES users(id),
+  blocked_id UUID REFERENCES users(id),
+  PRIMARY KEY (blocker_id, blocked_id)
+);
